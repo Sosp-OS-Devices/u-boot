@@ -37,6 +37,18 @@
 		gpio = <&r_pio 0 2 GPIO_ACTIVE_HIGH>;	/* PL2 */
 		enable-active-high;
 	};
+
+	reg_usb_host_en: usb-host-en {
+		compatible = "regulator-fixed";
+		regulator-name = "usb-host-en";
+		regulator-min-microvolt = <5000000>;
+		regulator-max-microvolt = <5000000>;
+		vin-supply = <&reg_vcc5v>;
+		gpio = <&r_pio 1 5 GPIO_ACTIVE_HIGH>;	/* PM5 */
+		enable-active-high;
+		regulator-always-on;
+		regulator-boot-on;
+	};
 };
 
 &uart0 {
@@ -46,11 +58,13 @@
 };
 
 &mmc0 {
+	bootph-all;
 	bus-width = <4>;
 	status = "okay";
 };
 
 &mmc2 {
+	bootph-all;
 	bus-width = <8>;
 	cap-mmc-hw-reset;
 	mmc-ddr-1_8v;
@@ -109,8 +123,12 @@
 	};
 };
 
-&ufs {
+&i2c0 {
 	status = "okay";
+	eeprom: eeprom@50 {
+		compatible = "atmel,24c16a", "i2c-eeprom";
+		reg = <0x50>;
+	};
 };
 
 &r_i2c0 {
@@ -238,6 +256,11 @@
 		reg = <0>;
 		spi-max-frequency = <20000000>;
 	};
+};
+
+&ufs {
+	bootph-all;
+	status = "okay";
 };
 
 &serdes {
