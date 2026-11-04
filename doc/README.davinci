@@ -1,0 +1,57 @@
+Summary
+=======
+
+Note: this document used to be about the entire family of DaVinci SOCs but the
+support for the DM* family and DA830 has since been dropped.
+
+This README is about U-Boot support for TI's DA850 SoC. This SOC has an OMAP
+part number but is very similar to the DaVinci series.
+
+Currently the following boards are supported:
+
+* TI OMAP-L138 LCDK
+
+* Lego EV3
+
+Build
+=====
+
+* TI OMAP-L138 LCDK
+
+make omapl138_lcdk_defconfig
+make
+
+* Lego EV3
+
+make legoev3_defconfig
+make
+
+Bootloaders
+===============
+
+For DA850 an SPL (secondary program loader, see doc/README.SPL) is provided
+to load U-Boot from SPI flash, MMC or NAND. The SPL takes care of the low level
+initialization.
+
+The SPL is built as u-boot.ais for all DA850 defconfigs except those booting
+from NOR flash. The resulting image file can be programmed to the SPI flash
+of the LCDK.
+
+Devices that support booting from NOR utilize execute in place (XIP) and do
+not require SPL to perform low level initialization.
+
+Links
+=====
+
+1) TI OMAP-L138 LCDK
+http://focus.ti.com/docs/prod/folders/print/omap-l138.html
+https://www.ti.com/tool/TMDXLCDK138
+
+Davinci special defines
+=======================
+
+CFG_SYS_DV_NOR_BOOT_CFG:	AM18xx based boards, booting in NOR Boot mode
+				need a "NOR Boot Configuration Word" stored
+				in the NOR Flash. This define adds this.
+				More Info about this, see:
+				spraba5a.pdf chapter 3.1

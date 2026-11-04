@@ -1,0 +1,50 @@
+// SPDX-License-Identifier: GPL-2.0-only
+/*
+ * Copyright (C) 2025 Renesas Electronics Corp.
+ */
+
+#include <asm/arch/renesas.h>
+#include <asm/arch/sys_proto.h>
+#include <asm/io.h>
+#include <asm/mach-types.h>
+#include <asm/processor.h>
+#include <asm/system.h>
+#include <asm-generic/u-boot.h>
+#include <linux/errno.h>
+
+static void init_gic_v3(void)
+{
+	/* GIC v3 power on */
+	writel(BIT(1), GICR_LPI_PWRR);
+
+	/* Wait till the WAKER_CA_BIT changes to 0 */
+	clrbits_le32(GICR_LPI_WAKER, BIT(1));
+	while (readl(GICR_LPI_WAKER) & BIT(2))
+		;
+
+	writel(0xffffffff, GICR_SGI_BASE + GICR_IGROUPR0);
+}
+
+int board_init(void)
+{
+	/* Allow WDT reset */
+	writel(RST_KCPROT_DIS, RST_RESKCPROT0);
+	clrbits_le32(RST_WDTRSTCR, RST_WWDT_RSTMSK | RST_RWDT_RSTMSK);
+
+	if (current_el() != 3)
+		return 0;
+	init_gic_v3();
+
+	return 0;
+}
+
+void __weak reset_cpu(void)
+{
+	writel(RST_KCPROT_DIS, RST_RESKCPROT0);
+	writel(0x1, RST_SWSRES1A);
+}
+
+int ft_board_setup(void *blob, struct bd_info *bd)
+{
+	return 0;
+}

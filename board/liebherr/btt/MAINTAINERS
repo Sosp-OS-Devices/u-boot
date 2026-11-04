@@ -1,0 +1,6 @@
+BTT BOARD
+M:	Lukasz Majewski <lukma@nabladev.com>
+S:	Maintained
+F:	board/liebherr/btt/
+F:	include/configs/btt.h
+F:	configs/imx28_btt3_defconfig
