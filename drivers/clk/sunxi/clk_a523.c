@@ -47,6 +47,8 @@ static struct ccu_clk_gate a523_gates[] = {
 	[CLK_BUS_EHCI0]		= GATE(0xa8c, BIT(4)),
 	[CLK_BUS_EHCI1]		= GATE(0xa8c, BIT(5)),
 	[CLK_BUS_OTG]		= GATE(0xa8c, BIT(8)),
+	[CLK_USB3_REF]		= GATE(0x0A84, BIT(31)),
+	[CLK_PCIE_AUX]		= GATE(0xaa0, BIT(31)),
 };
 
 static struct ccu_reset a523_resets[] = {
@@ -76,6 +78,7 @@ static struct ccu_reset a523_resets[] = {
 	[RST_BUS_EHCI0]		= RESET(0xa8c, BIT(20)),
 	[RST_BUS_EHCI1]		= RESET(0xa8c, BIT(21)),
 	[RST_BUS_OTG]		= RESET(0xa8c, BIT(24)),
+	[RST_BUS_PCIE_USB3]	= RESET(0xaac, BIT(24)),
 };
 
 const struct ccu_desc a523_ccu_desc = {

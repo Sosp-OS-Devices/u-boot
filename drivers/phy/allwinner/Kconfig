@@ -33,3 +33,11 @@ config PHY_SUN50I_USB3
 	help
 	  Enable this to support the USB3 transceiver that is part of
 	  Allwinner sun50i SoCs.
+	  
+config PHY_SUN55I_PCIE_USB3
+	bool "Allwinner SUN55I INNO COMBO PHY Driver"
+	depends on ARCH_SUNXI
+	select PHY
+	help
+	  Enable this to support the Allwinner sun55i PCIe/USB3.0 combo PHY
+	  with INNOSILICON IP block.

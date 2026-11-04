@@ -204,6 +204,16 @@ static int mmc_update_clk(struct sunxi_mmc_priv *priv)
 static int mmc_config_clock(struct sunxi_mmc_priv *priv, struct mmc *mmc)
 {
 	unsigned rval = readl(&priv->reg->clkcr);
+	unsigned int clock = mmc->clock;
+
+	/* In SPL, cap the clock to avoid signal integrity issues. */
+	#ifdef CONFIG_XPL_BUILD
+	if (IS_ENABLED(CONFIG_MACH_SUN55I_A523) && clock > 12000000)
+		clock = 12000000;
+	#endif
+
+	debug("mmc %u config_clock req %u actual %u\n", priv->mmc_no,
+	      mmc->clock, clock);
 
 	/* Disable Clock */
 	rval &= ~SUNXI_MMC_CLK_ENABLE;
@@ -211,12 +221,25 @@ static int mmc_config_clock(struct sunxi_mmc_priv *priv, struct mmc *mmc)
 	if (mmc_update_clk(priv))
 		return -1;
 
+	/*
+	 * The A523 cannot use CCLK_DIV=0 (it is undefined), so the internal
+	 * divider is forced to /2 below. That halves the internal clock, so
+	 * request twice the rate from the module clock to keep the actual
+	 * card clock in line with mmc->clock. This compensates every branch
+	 * and build mode where the divider is applied.
+	 */
+	if (IS_ENABLED(CONFIG_MACH_SUN55I_A523))
+		clock *= 2;
+
 	/* Set mod_clk to new rate */
-	if (mmc_set_mod_clk(priv, mmc->clock))
+	if (mmc_set_mod_clk(priv, clock))
 		return -1;
 
 	/* Clear internal divider */
 	rval &= ~SUNXI_MMC_CLK_DIVIDER_MASK;
+	/* On A523 CCLK_DIV=0 is undefined; use /2. */
+	if (IS_ENABLED(CONFIG_MACH_SUN55I_A523))
+		rval |= 1;
 	writel(rval, &priv->reg->clkcr);
 
 #if defined(CONFIG_SUNXI_GEN_SUN6I) || defined(CONFIG_SUN50I_GEN_H6) || defined(CONFIG_SUNXI_GEN_NCAT2)
@@ -316,9 +339,11 @@ static int mmc_trans_data_by_cpu(struct sunxi_mmc_priv *priv, struct mmc *mmc,
 		in_fifo = SUNXI_MMC_STATUS_FIFO_LEVEL(status);
 		if (in_fifo == 0 && (status & SUNXI_MMC_STATUS_FIFO_FULL))
 			in_fifo = 32;
+		if (in_fifo > word_cnt - i)
+			in_fifo = word_cnt - i;
 		for (; in_fifo > 0; in_fifo--)
 			buff[i++] = readl_relaxed(&priv->reg->fifo);
-		dmb();
+		mb();
 	}
 
 	return 0;
@@ -470,15 +495,15 @@ static void sunxi_mmc_reset(void *regs)
 {
 	/* Reset controller */
 	writel(SUNXI_MMC_GCTRL_RESET, regs + SUNXI_MMC_GCTRL);
+	udelay(20000);
+
+	/* Reset card on all SoCs supporting eMMC hardware reset */
+	writel(SUNXI_MMC_HWRST_ASSERT, regs + SUNXI_MMC_HWRST);
+	udelay(50);
+	writel(SUNXI_MMC_HWRST_DEASSERT, regs + SUNXI_MMC_HWRST);
 	udelay(1000);
 
 	if (IS_ENABLED(CONFIG_SUN50I_GEN_H6) || IS_ENABLED(CONFIG_SUNXI_GEN_NCAT2)) {
-		/* Reset card */
-		writel(SUNXI_MMC_HWRST_ASSERT, regs + SUNXI_MMC_HWRST);
-		udelay(10);
-		writel(SUNXI_MMC_HWRST_DEASSERT, regs + SUNXI_MMC_HWRST);
-		udelay(300);
-
 		/* Setup FIFO R/W threshold. Needed on H616. */
 		writel(SUNXI_MMC_THLDC_READ_THLD(512) |
 		       SUNXI_MMC_THLDC_WRITE_EN |
@@ -573,21 +598,68 @@ struct mmc *sunxi_mmc_init(int sdc_no)
 	cfg->ops  = &sunxi_mmc_ops;
 
 	cfg->voltages = MMC_VDD_32_33 | MMC_VDD_33_34;
-	cfg->host_caps = MMC_MODE_4BIT;
+	#ifdef CONFIG_XPL_BUILD
+	if (IS_ENABLED(CONFIG_MACH_SUN55I_A523))
+		cfg->host_caps = 0;
+	else
+	#endif
+		cfg->host_caps = MMC_MODE_4BIT;
+
+	debug("mmc %u sdc %d host_caps initial %x\n", priv->mmc_no, sdc_no,
+	      cfg->host_caps);
 
 	if ((IS_ENABLED(CONFIG_MACH_SUN50I) || IS_ENABLED(CONFIG_MACH_SUN8I) ||
 	    IS_ENABLED(CONFIG_MACH_SUN9I) || IS_ENABLED(CONFIG_SUN50I_GEN_H6) ||
 	    IS_ENABLED(CONFIG_MACH_SUN55I_A523)) && (sdc_no == 2))
 		cfg->host_caps = MMC_MODE_8BIT;
 
-	cfg->host_caps |= MMC_MODE_HS_52MHz | MMC_MODE_HS;
-	cfg->b_max = CONFIG_SYS_MMC_MAX_BLK_COUNT;
+	#ifdef CONFIG_XPL_BUILD
+	if (IS_ENABLED(CONFIG_MACH_SUN55I_A523)) {
+		/*
+		 * Avoid high-speed modes and limit the clock to keep the
+		 * SPL reads reliable on this controller.
+		 */
+		cfg->b_max = CONFIG_SYS_MMC_MAX_BLK_COUNT;
+		cfg->f_min = 400000;
+		cfg->f_max = 12000000;
+	} else
+	#endif
+	{
+		cfg->host_caps |= MMC_MODE_HS_52MHz | MMC_MODE_HS;
+		cfg->b_max = CONFIG_SYS_MMC_MAX_BLK_COUNT;
+		cfg->f_min = 400000;
+		if (IS_ENABLED(CONFIG_MACH_SUN55I_A523) && sdc_no == 2) {
+			/*
+			 * eMMC block reads are still unreliable at the full
+			 * HS clock in U-Boot proper, so keep the same
+			 * conservative clock the SPL uses.
+			 */
+			cfg->host_caps &= ~(MMC_MODE_HS_52MHz | MMC_MODE_HS);
+			cfg->f_max = 12000000;
+		} else {
+			cfg->f_max = 52000000;
+		}
+	}
 
-	cfg->f_min = 400000;
-	cfg->f_max = 52000000;
+	#ifdef CONFIG_XPL_BUILD
+	if (IS_ENABLED(CONFIG_MACH_SUN55I_A523) && sdc_no == 2) {
+		/*
+		 * In SPL there is no delay tuning. Avoid HS 52MHz on eMMC
+		 * to prevent DMA timeouts or bus hangs.
+		 */
+		cfg->host_caps &= ~(MMC_MODE_HS_52MHz | MMC_MODE_HS);
+		if (cfg->f_max > 20000000)
+			cfg->f_max = 20000000;
+	}
+	#endif
+
+	debug("mmc %u sdc %d host_caps final %x f_max %u\n", priv->mmc_no,
+	      sdc_no, cfg->host_caps, cfg->f_max);
 
 	if (mmc_resource_init(sdc_no) != 0)
 		return NULL;
+
+	cfg->b_max = 1;
 
 	/* config ahb clock */
 	debug("init mmc %d clock and io\n", sdc_no);
@@ -708,6 +780,16 @@ static int sunxi_mmc_probe(struct udevice *dev)
 
 	priv->mmc_no = ((uintptr_t)priv->reg - SUNXI_MMC0_BASE) / 0x1000;
 	priv->mclkreg = (void *)ccu_reg + get_mclk_offset() + priv->mmc_no * 4;
+
+	if (IS_ENABLED(CONFIG_MACH_SUN55I_A523) && priv->mmc_no == 2) {
+		/*
+		 * eMMC block reads are still unreliable at the full HS clock
+		 * in U-Boot proper, so keep the same conservative clock the
+		 * SPL uses.
+		 */
+		cfg->host_caps &= ~(MMC_MODE_HS_52MHz | MMC_MODE_HS);
+		cfg->f_max = 12000000;
+	}
 
 	ret = clk_get_by_name(dev, "ahb", &gate_clk);
 	if (!ret)

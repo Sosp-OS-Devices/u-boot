@@ -208,6 +208,12 @@
 #define BOOT_TARGET_DEVICES_DHCP(func)
 #endif
 
+#ifdef CONFIG_CMD_NVME
+#define BOOT_TARGET_DEVICES_NVME(func) func(NVME, nvme, 0)
+#else
+#define BOOT_TARGET_DEVICES_NVME(func)
+#endif
+
 /* FEL boot support, auto-execute boot.scr if a script address was provided */
 #define BOOTENV_DEV_FEL(devtypeu, devtypel, instance) \
 	"bootcmd_fel=" \
@@ -224,7 +230,8 @@
 	BOOT_TARGET_DEVICES_SCSI(func) \
 	BOOT_TARGET_DEVICES_USB(func) \
 	BOOT_TARGET_DEVICES_PXE(func) \
-	BOOT_TARGET_DEVICES_DHCP(func)
+	BOOT_TARGET_DEVICES_DHCP(func) \
+	BOOT_TARGET_DEVICES_NVME(func)
 
 #ifdef CONFIG_OLD_SUNXI_KERNEL_COMPAT
 #define BOOTCMD_SUNXI_COMPAT \

@@ -186,6 +186,48 @@ config DRAM_SUNXI_TPR14
 	help
 	  TPR14 value from vendor DRAM settings.
 
+config DRAM_SUNXI_TPR_ALT_PARAMETERS
+	bool "DRAM alternative TPR parameter set (memory check retry)"
+	depends on MACH_SUN55I_A523
+	help
+	  Enable the DRAM init fallback: sunxi_dram_init() retrains the DRAM
+	  from scratch with the alternative parameter set below and re-runs
+	  the built-in memory check when that check fails with the default
+	  parameters.
+
+config DRAM_SUNXI_TPR6_ALT
+	hex "DRAM TPR6 parameter (alternative set)"
+	depends on DRAM_SUNXI_TPR_ALT_PARAMETERS
+	default 0x0
+	help
+	  Alternative TPR6 value, used when
+	  CONFIG_DRAM_SUNXI_TPR_ALT_PARAMETERS is enabled and the built-in
+	  memory check fails with the default parameters.
+
+config DRAM_SUNXI_TPR10_ALT
+	hex "DRAM TPR10 parameter (alternative set)"
+	depends on DRAM_SUNXI_TPR_ALT_PARAMETERS
+	default 0x0
+	help
+	  Alternative TPR10 value, used together with TPR6_ALT, TPR11_ALT
+	  and TPR12_ALT.
+
+config DRAM_SUNXI_TPR11_ALT
+	hex "DRAM TPR11 parameter (alternative set)"
+	depends on DRAM_SUNXI_TPR_ALT_PARAMETERS
+	default 0x0
+	help
+	  Alternative TPR11 value, used together with TPR6_ALT, TPR10_ALT
+	  and TPR12_ALT.
+
+config DRAM_SUNXI_TPR12_ALT
+	hex "DRAM TPR12 parameter (alternative set)"
+	depends on DRAM_SUNXI_TPR_ALT_PARAMETERS
+	default 0x0
+	help
+	  Alternative TPR12 value, used together with TPR6_ALT, TPR10_ALT
+	  and TPR11_ALT.
+
 choice
 	prompt "DRAM PHY pin mapping selection"
 	default DRAM_SUNXI_PHY_ADDR_MAP_0

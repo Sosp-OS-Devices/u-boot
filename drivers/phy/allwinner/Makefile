@@ -5,3 +5,4 @@
 
 obj-$(CONFIG_PHY_SUN4I_USB)		+= phy-sun4i-usb.o
 obj-$(CONFIG_PHY_SUN50I_USB3)		+= phy-sun50i-usb3.o
+obj-$(CONFIG_PHY_SUN55I_PCIE_USB3)		+= phy-sun55i-pcie-usb3.o

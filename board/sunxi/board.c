@@ -509,6 +509,26 @@ static void mmc_pinmux_setup(int sdc)
 
 int board_mmc_init(struct bd_info *bis)
 {
+#ifdef CONFIG_XPL_BUILD
+	/*
+	 * In SPL with CONFIG_SPL_MMC_TINY, only one static struct mmc exists.
+	 * Bring up ONLY the slot that the BROM booted from, avoiding dual
+	 * initialization, brownouts, and struct mmc corruption.
+	 */
+	if (IS_ENABLED(CONFIG_SPL_MMC_TINY)) {
+		if (CONFIG_MMC_SUNXI_SLOT_EXTRA != -1 &&
+		    sunxi_get_boot_device() == BOOT_DEVICE_MMC2) {
+			mmc_pinmux_setup(CONFIG_MMC_SUNXI_SLOT_EXTRA);
+			return sunxi_mmc_init(CONFIG_MMC_SUNXI_SLOT_EXTRA) ? 0 : -1;
+		}
+
+		if (!IS_ENABLED(CONFIG_UART0_PORT_F) &&
+		    sunxi_get_boot_device() == BOOT_DEVICE_MMC1) {
+			mmc_pinmux_setup(0);
+			return sunxi_mmc_init(0) ? 0 : -1;
+		}
+	}
+#endif
 	/*
 	 * The BROM always accesses MMC port 0 (typically an SD card), and
 	 * most boards seem to have such a slot. The others haven't reported
@@ -614,6 +634,41 @@ void sunxi_board_init(void)
 #ifdef CONFIG_AXP_DCDC5_VOLT
 	power_failed |= axp_set_dcdc5(CONFIG_AXP_DCDC5_VOLT);
 #endif
+
+	/*
+	 * On AXP717, CLDO3 supplies VCC-CARD (SD card power). The BROM
+	 * enables it to read SPL, but after jumping to U-Boot SPL the
+	 * regulator stays at its power-on default which may not be 3.3V
+	 * on all boards/revisions. Explicitly configure it here so the
+	 * SPL MMC driver can reliably access the SD card.
+	 *
+	 * AXP717 CLDO3 registers (from axp_regulator.c):
+	 *   0x91 bit 2 = enable
+	 *   0x9d bits[4:0] = voltage (500mV + val*100mV)
+	 */
+	if (IS_ENABLED(CONFIG_AXP717_POWER) &&
+	    IS_ENABLED(CONFIG_MACH_SUN55I_A523) && !power_failed) {
+		u8 reg_val;
+
+		/* Set CLDO3 voltage to 3300mV: (3300-500)/100 = 0x1c */
+		power_failed |= pmic_bus_read(0x9d, &reg_val);
+		if (!power_failed) {
+			reg_val = (reg_val & ~0x1f) | 0x1c;
+			power_failed |= pmic_bus_write(0x9d, reg_val);
+		}
+
+		/* Enable CLDO3 (set bit 2 in register 0x91) */
+		if (!power_failed) {
+			power_failed |= pmic_bus_read(0x91, &reg_val);
+			if (!power_failed && !(reg_val & BIT(2))) {
+				printf("PMIC: enabling CLDO3 (VCC-CARD) at 3.3V\n");
+				power_failed |= pmic_bus_write(0x91,
+							      reg_val | BIT(2));
+				/* Wait for LDO to stabilize */
+				mdelay(50);
+			}
+		}
+	}
 
 #ifdef CONFIG_AXP_ALDO1_VOLT
 	power_failed |= axp_set_aldo1(CONFIG_AXP_ALDO1_VOLT);

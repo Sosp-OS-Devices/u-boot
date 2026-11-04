@@ -393,6 +393,8 @@ int spl_mmc_load(struct spl_image_info *spl_image,
 			return ret;
 		}
 	}
+	extern void udelay(unsigned long usec);
+	udelay(250000);
 
 	boot_mode = spl_mmc_boot_mode(mmc, bootdev->boot_device);
 	ret = -EINVAL;

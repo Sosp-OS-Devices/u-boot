@@ -255,7 +255,7 @@ __weak void spl_board_prepare_for_boot(void)
 
 __weak struct legacy_img_hdr *spl_get_load_buffer(ssize_t offset, size_t size)
 {
-	return map_sysmem(CONFIG_TEXT_BASE + offset, 0);
+	return (void *)(0x41000000 + offset);
 }
 
 void spl_set_header_raw_uboot(struct spl_image_info *spl_image)

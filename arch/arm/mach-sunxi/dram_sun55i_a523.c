@@ -1468,13 +1468,13 @@ static void init_something(void)
 	writel(7, 0x07102008);
 }
 
-unsigned long sunxi_dram_init(void)
+static unsigned long dram_init_with_para(const struct dram_para *para,
+					 u32 tpr11, u32 tpr12)
 {
 	struct dram_config config;
-	unsigned long size;
 
 	config.clk = 360;
-	switch (para.type) {
+	switch (para->type) {
 	case SUNXI_DRAM_TYPE_DDR3:
 		config.odt_en = 0x90909090;
 		config.tpr11 = 0x8f919190;
@@ -1494,18 +1494,53 @@ unsigned long sunxi_dram_init(void)
 	setbits_le32(0x03000160, BIT(8));
 	clrbits_le32(0x03000168, 0x3f);
 
-	mctl_auto_detect_rank_width(&para, &config);
-	mctl_auto_detect_dram_size(&para, &config);
+	mctl_auto_detect_rank_width(para, &config);
+	mctl_auto_detect_dram_size(para, &config);
 
 	config.clk = CONFIG_DRAM_CLK;
 	config.odt_en = CONFIG_DRAM_SUNXI_ODT_EN;
-	config.tpr11 = CONFIG_DRAM_SUNXI_TPR11;
-	config.tpr12 = CONFIG_DRAM_SUNXI_TPR12;
+	config.tpr11 = tpr11;
+	config.tpr12 = tpr12;
 	config.tpr14 = CONFIG_DRAM_SUNXI_TPR14;
 
-	mctl_core_init(&para, &config);
+	mctl_core_init(para, &config);
 
-	size = mctl_calc_size(&config);
+	return mctl_calc_size(&config);
+}
+
+unsigned long sunxi_dram_init(void)
+{
+	unsigned long size;
+#if IS_ENABLED(CONFIG_DRAM_SUNXI_TPR_ALT_PARAMETERS)
+	struct dram_para para_alt;
+#endif
+
+	size = dram_init_with_para(&para, CONFIG_DRAM_SUNXI_TPR11,
+				   CONFIG_DRAM_SUNXI_TPR12);
+
+#if IS_ENABLED(CONFIG_DRAM_SUNXI_TPR_ALT_PARAMETERS)
+	if (size == 0) {
+		/*
+		 * The memory probe built into mctl_calc_size() failed with
+		 * the default parameters. The defconfig can provide an
+		 * alternative set of PHY timings
+		 * (CONFIG_DRAM_SUNXI_TPR*_ALT) for boards whose DRAM
+		 * variants need them; retrain the DRAM with that set and
+		 * re-run the probe.
+		 */
+		printf("DRAM memory check failed, retrying with alternative parameters\n");
+
+		para_alt = para;
+		para_alt.tpr6 = CONFIG_DRAM_SUNXI_TPR6_ALT;
+		para_alt.tpr10 = CONFIG_DRAM_SUNXI_TPR10_ALT;
+
+		size = dram_init_with_para(&para_alt,
+					   CONFIG_DRAM_SUNXI_TPR11_ALT,
+					   CONFIG_DRAM_SUNXI_TPR12_ALT);
+		if (size == 0)
+			panic("DRAM unstable with both parameter sets\n");
+	}
+#endif
 
 	sunxi_nsi_init();
 	init_something();

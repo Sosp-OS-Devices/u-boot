@@ -479,4 +479,12 @@ config PCIE_DW_IMX
 	  Say Y here if you want to enable DW PCIe controller support on
 	  iMX SoCs.
 
+
+config PCIE_SUN55I_RC
+	bool "Allwinner SUN55I DesignWare PCIe controller"
+	default n
+	depends on ARCH_SUNXI
+	help
+	   Enables support for the DW PCIe controller in the Allwinner Sun55i SoC.
+	   
 endif
